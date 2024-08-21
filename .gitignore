@@ -1,0 +1,8 @@
+.env
+OriginalData
+openhermes-2.5-mistral-7b.Q4_K_M.gguf
+db
+.cache
+docker-compose1.yml
+flagged
+venv
