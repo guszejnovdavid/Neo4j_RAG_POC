@@ -1,25 +1,27 @@
-Neo4j Data Import Guide
+# Neo4j Data Import Guide
+
 This guide explains how to set up Neo4j using Docker Compose and import data using CSV files.
-Prerequisites
 
-Docker and Docker Compose installed on your system
-CSV files prepared for import:
+## Prerequisites
 
-posts.csv
-users.csv
-tags.csv
-posts_rel.csv
-posts_answers.csv
-tags_posts_rel.csv
-users_posts_rel.csv
+- Docker and Docker Compose installed on your system
+- CSV files prepared for import:
+  - `posts.csv`
+  - `users.csv`
+  - `tags.csv`
+  - `posts_rel.csv`
+  - `posts_answers.csv`
+  - `tags_posts_rel.csv`
+  - `users_posts_rel.csv`
 
+## Steps
 
+### 1. Create a `docker-compose.yml` File
 
-Steps
+Create a file named `docker-compose.yml` in your project directory with the following content:
 
-Create a docker-compose.yml file:
-Create a file named docker-compose.yml in your project directory with the following content:
-yamlCopyversion: "3.8"
+```yaml
+version: "3.8"
 services:
   neo4j:
     image: neo4j:5.19.0
@@ -48,10 +50,11 @@ services:
       - ./db/logs:/logs
       - ./db/plugins:/plugins
       - ./db/import:/var/lib/neo4j/import
-Note: Adjust the NEO4J_AUTH value to set a secure password.
-Prepare your directory structure:
+
+### 2. Prepare Your Directory Structure
 Ensure you have the following directory structure in your project folder:
-Copyproject_folder/
+
+project_folder/
 ├── docker-compose.yml
 └── db/
     ├── data/
@@ -67,56 +70,60 @@ Copyproject_folder/
         ├── tags_posts_rel.csv
         └── users_posts_rel.csv
 
-Start the Neo4j container:
-Run the following command in your project directory:
-bashCopydocker-compose up -d
-This will start the Neo4j container in detached mode.
-Run the import command:
+### 3. Start the Neo4j Container
+Run the following command in your project directory to start the Neo4j container in detached mode:
+```
+docker-compose up -d
+```
+
+### 4. Run the Import Command
 Once the container is up and running, execute the import command:
-bashCopydocker-compose exec neo4j neo4j-admin database import full \
-  --id-type string \
-  --nodes=Post=/var/lib/neo4j/import/posts.csv \
-  --nodes=User=/var/lib/neo4j/import/users.csv \
-  --nodes=Tag=/var/lib/neo4j/import/tags.csv \
-  --relationships=PARENT_OF=/var/lib/neo4j/import/posts_rel.csv \
-  --relationships=ANSWER=/var/lib/neo4j/import/posts_answers.csv \
-  --relationships=HAS_TAG=/var/lib/neo4j/import/tags_posts_rel.csv \
-  --relationships=POSTED=/var/lib/neo4j/import/users_posts_rel.csv \
-  --overwrite-destination=true \
-  --verbose
+```
+docker-compose exec neo4j neo4j-admin database import full \
+--id-type string \
+--nodes=Post=/var/lib/neo4j/import/posts.csv \
+--nodes=User=/var/lib/neo4j/import/users.csv \
+--nodes=Tag=/var/lib/neo4j/import/tags.csv \
+--relationships=PARENT_OF=/var/lib/neo4j/import/posts_rel.csv \
+--relationships=ANSWER=/var/lib/neo4j/import/posts_answers.csv \
+--relationships=HAS_TAG=/var/lib/neo4j/import/tags_posts_rel.csv \
+--relationships=POSTED=/var/lib/neo4j/import/users_posts_rel.csv \
+--overwrite-destination=true \
+--verbose
+```
 
-Restart the Neo4j container:
-bashCopydocker-compose restart neo4j
+### 5. Restart the Neo4j Container
+Restart the Neo4j container to apply the changes:
+```
+docker-compose restart neo4j
+```
 
-Access Neo4j:
+### 6. Access Neo4j
 Open a web browser and navigate to http://localhost:7888. Log in using the username neo4j and the password you set in the docker-compose.yml file.
 
 Configuration Details
-
-The Neo4j browser is accessible on port 7888, and the Bolt protocol on port 7999.
-Memory is limited to 6GB, with 4GB reserved.
-APOC plugins are enabled for extended functionality.
-File import and export are enabled via APOC.
-Memory settings:
-
+Neo4j Browser: Accessible on port 7888
+Bolt Protocol: Accessible on port 7999
+Memory Limits:
+Total memory limit: 6GB
+Reserved memory: 4GB
 Page cache: 2GB
-Initial heap: 1GB
-Max heap: 3GB
-
-
-
+Initial heap size: 1GB
+Max heap size: 3GB
+Plugins: APOC plugins enabled for extended functionality
+File Import/Export: Enabled via APOC
 Troubleshooting
+Permission Issues: Ensure that the Neo4j user has read access to the CSV files.
 
-If you encounter permission issues, ensure that the Neo4j user has read access to the CSV files.
-Verify that your CSV files are correctly formatted according to Neo4j's requirements.
-Check the Neo4j logs for detailed error messages:
-bashCopydocker-compose logs neo4j
+CSV Formatting: Verify that your CSV files are correctly formatted according to Neo4j's requirements.
 
+Logs: Check the Neo4j logs for detailed error messages:
 
+bash
+Copy code
+docker-compose logs neo4j
 Additional Notes
-
 The --id-type string option specifies that node IDs are strings. Adjust if your data uses different ID types.
 The --overwrite-destination=true flag allows overwriting an existing database. Use with caution in production environments.
 The --verbose flag provides detailed output during the import process, which can be helpful for debugging.
-
-Remember to replace the password in the docker-compose.yml file with a secure one before deploying in a production environment.
+Reminder: Replace the password in the docker-compose.yml file with a secure one before deploying in a production environment.
