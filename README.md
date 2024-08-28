@@ -1,3 +1,6 @@
+# The Stack Overflow data can be downloaded from the given website just scroll down and click csv
+https://neo4j.com/blog/import-10m-stack-overflow-questions/
+
 # Neo4j Data Import Guide
 
 This guide explains how to set up Neo4j using Docker Compose and import data using CSV files.
@@ -69,6 +72,21 @@ project_folder/
         ├── posts_answers.csv
         ├── tags_posts_rel.csv
         └── users_posts_rel.csv
+# Put data downloaded earlier in import folder after running cleaning.py
+```bash
+python cleaning.py
+
+# To Create Vector Index on Particular Node Use following Command:
+``bash
+CREATE VECTOR INDEX posts IF NOT EXISTS
+FOR (p:Post)
+ON (p.embedding)
+OPTIONS {
+  indexConfig: {
+    `vector.dimensions`: 384,  // Dimension size based on your embedding model
+    `vector.similarity_function`: 'cosine'  // Using cosine similarity for vector comparison
+  }
+}
 
 ### 3. Start the Neo4j Container
 Run the following command in your project directory to start the Neo4j container in detached mode:
