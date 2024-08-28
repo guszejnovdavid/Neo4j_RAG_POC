@@ -72,13 +72,12 @@ project_folder/
 
 ### 3. Start the Neo4j Container
 Run the following command in your project directory to start the Neo4j container in detached mode:
-```
+```bash
 docker-compose up -d
-```
 
 ### 4. Run the Import Command
 Once the container is up and running, execute the import command:
-```
+```bash
 docker-compose exec neo4j neo4j-admin database import full \
 --id-type string \
 --nodes=Post=/var/lib/neo4j/import/posts.csv \
@@ -90,18 +89,17 @@ docker-compose exec neo4j neo4j-admin database import full \
 --relationships=POSTED=/var/lib/neo4j/import/users_posts_rel.csv \
 --overwrite-destination=true \
 --verbose
-```
+
 
 ### 5. Restart the Neo4j Container
 Restart the Neo4j container to apply the changes:
-```
+```bash
 docker-compose restart neo4j
-```
 
 ### 6. Access Neo4j
 Open a web browser and navigate to http://localhost:7888. Log in using the username neo4j and the password you set in the docker-compose.yml file.
 
-Configuration Details
+Configuration Details:
 Neo4j Browser: Accessible on port 7888
 Bolt Protocol: Accessible on port 7999
 Memory Limits:
@@ -119,11 +117,12 @@ CSV Formatting: Verify that your CSV files are correctly formatted according to 
 
 Logs: Check the Neo4j logs for detailed error messages:
 
-bash
-Copy code
+```bash
 docker-compose logs neo4j
+
 Additional Notes
 The --id-type string option specifies that node IDs are strings. Adjust if your data uses different ID types.
 The --overwrite-destination=true flag allows overwriting an existing database. Use with caution in production environments.
 The --verbose flag provides detailed output during the import process, which can be helpful for debugging.
+
 Reminder: Replace the password in the docker-compose.yml file with a secure one before deploying in a production environment.
