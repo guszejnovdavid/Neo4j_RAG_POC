@@ -87,6 +87,20 @@ OPTIONS {
     `vector.similarity_function`: 'cosine'  // Using cosine similarity for vector comparison
   }
 }
+# To Create embeddings Related with Post Body We can use cypher query to be run in browser that is faster than python function populate embeddings
+```bash
+CALL apoc.periodic.iterate(
+  'MATCH (p:Post) WHERE p.embedding IS NULL RETURN p',
+  'CALL gds.embeddings.sentence.stream({
+     model: "all-MiniLM-L6-v2",
+     input: p.body
+   })
+   YIELD embedding
+   SET p.embedding = embedding',
+  {batchSize: 1000, parallel: true}
+)
+YIELD batches, total, timeTaken, committedOperations
+RETURN batches, total, timeTaken, committedOperations
 
 ### 3. Start the Neo4j Container
 Run the following command in your project directory to start the Neo4j container in detached mode:
