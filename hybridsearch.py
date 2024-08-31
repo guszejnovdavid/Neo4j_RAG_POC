@@ -34,58 +34,67 @@ llm = LlamaCpp(model_path=model_path, temperature=0.5, max_tokens=1000)
 # Set up embeddings
 embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
-def populate_embeddings(driver, embeddings, batch_size=100, max_workers=4):
-    with driver.session() as session:
-        # Check if there are any posts without embeddings
-        count_result = session.run("MATCH (p:Post) WHERE p.embedding IS NULL RETURN count(p) AS count").single()
-        posts_without_embeddings = count_result["count"]
+# This is optional function if you want to run cypher query given in Readme to calcualte embeddings
 
-        if posts_without_embeddings == 0:
-            print("All posts already have embeddings. No action needed.")
-            return
+# def populate_embeddings(driver, embeddings, batch_size=100, max_workers=4):
+#     with driver.session() as session:
+#         # Check if there are any posts without embeddings
+#         count_result = session.run("MATCH (p:Post) WHERE p.embedding IS NULL RETURN count(p) AS count").single()
+#         posts_without_embeddings = count_result["count"]
 
-        print(f"Found {posts_without_embeddings} posts without embeddings. Populating now...")
+#         if posts_without_embeddings == 0:
+#             print("All posts already have embeddings. No action needed.")
+#             return
 
-        # Fetch all posts without embeddings
-        result = session.run("MATCH (p:Post) WHERE p.embedding IS NULL RETURN p.body AS body, id(p) AS id")
-        posts = list(result)
+#         print(f"Found {posts_without_embeddings} posts without embeddings. Populating now...")
 
-        # Function to process a batch of posts
-        def process_batch(batch):
-            local_embeddings = []
-            for post in batch:
-                embedding = embeddings.embed_query(post["body"])
-                local_embeddings.append((post["id"], embedding))
-            return local_embeddings
+#         # Fetch all posts without embeddings
+#         result = session.run("MATCH (p:Post) WHERE p.embedding IS NULL RETURN p.body AS body, id(p) AS id")
+#         posts = list(result)
 
-        # Process posts in batches
-        with tqdm(total=len(posts)) as pbar:
-            for i in range(0, len(posts), batch_size):
-                batch = posts[i:i+batch_size]
+#         # Function to process a batch of posts
+#         # Function to process a batch of posts
+#         def process_batch(batch):
+#             local_embeddings = []
+#             for post in batch:
+#                 if post["body"] is None:
+#                     print(f"Warning: Post with id {post['id']} has a null body. Skipping...")
+#                     continue
+#                 try:
+#                     embedding = embeddings.embed_query(post["body"])
+#                     local_embeddings.append((post["id"], embedding))
+#                 except Exception as e:
+#                     print(f"Error processing post {post['id']}: {str(e)}")
+#             return local_embeddings
+
+#         # Process posts in batches
+#         with tqdm(total=len(posts)) as pbar:
+#             for i in range(0, len(posts), batch_size):
+#                 batch = posts[i:i+batch_size]
                 
-                # Use ThreadPoolExecutor for parallel processing
-                with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-                    futures = [executor.submit(process_batch, batch[j:j+batch_size//max_workers]) 
-                               for j in range(0, len(batch), batch_size//max_workers)]
+#                 # Use ThreadPoolExecutor for parallel processing
+#                 with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+#                     futures = [executor.submit(process_batch, batch[j:j+batch_size//max_workers]) 
+#                                for j in range(0, len(batch), batch_size//max_workers)]
                     
-                    batch_embeddings = []
-                    for future in concurrent.futures.as_completed(futures):
-                        batch_embeddings.extend(future.result())
+#                     batch_embeddings = []
+#                     for future in concurrent.futures.as_completed(futures):
+#                         batch_embeddings.extend(future.result())
 
-                # Bulk update the database
-                with driver.session() as update_session:
-                    update_session.run("""
-                    UNWIND $batch AS item
-                    MATCH (p:Post) WHERE id(p) = item.id
-                    SET p.embedding = item.embedding
-                    """, batch=[{"id": id, "embedding": embedding} for id, embedding in batch_embeddings])
+#                 # Bulk update the database
+#                 with driver.session() as update_session:
+#                     update_session.run("""
+#                     UNWIND $batch AS item
+#                     MATCH (p:Post) WHERE id(p) = item.id
+#                     SET p.embedding = item.embedding
+#                     """, batch=[{"id": id, "embedding": embedding} for id, embedding in batch_embeddings])
 
-                pbar.update(len(batch))
+#                 pbar.update(len(batch))
 
-        print(f"Embeddings populated successfully. {len(posts)} posts updated.")
+#         print(f"Embeddings populated successfully. {len(posts)} posts updated.")
 
-# Usage
-populate_embeddings(driver, embeddings)
+# # Usage
+# populate_embeddings(driver, embeddings)
 
 # Use existing vector index for Post nodes
 post_index = Neo4jVector(
