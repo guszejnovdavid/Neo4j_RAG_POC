@@ -76,18 +76,8 @@ project_folder/
 ```bash
 python cleaning.py
 
-# To Create Vector Index on Particular Node Use following Command:
-``bash
-CREATE VECTOR INDEX posts IF NOT EXISTS
-FOR (p:Post)
-ON (p.embedding)
-OPTIONS {
-  indexConfig: {
-    `vector.dimensions`: 384,  // Dimension size based on your embedding model
-    `vector.similarity_function`: 'cosine'  // Using cosine similarity for vector comparison
-  }
-}
-# in case above one does not work go for this
+# To Create Vector Index on Particular Node Use following Command and embedding
+
 ```bash
    post_index1 = Neo4jVector.from_existing_graph(
     embeddings,
@@ -100,20 +90,17 @@ OPTIONS {
     text_node_properties=['body'],
     embedding_node_property='embedding',
 )
-# To Create embeddings Related with Post Body We can use cypher query to be run in browser that is faster than python function populate embeddings
+# To use existing index:
 ```bash
-CALL apoc.periodic.iterate(
-  'MATCH (p:Post) WHERE p.embedding IS NULL RETURN p',
-  'CALL gds.embeddings.sentence.stream({
-     model: "all-MiniLM-L6-v2",
-     input: p.body
-   })
-   YIELD embedding
-   SET p.embedding = embedding',
-  {batchSize: 1000, parallel: true}
+post_index = Neo4jVector.from_existing_index(
+    embeddings,
+    url=NEO4J_URI,
+    username=NEO4J_USER,
+    password=NEO4J_PASSWORD,
+    index_name='posts',
+    text_node_property='body'
+    
 )
-YIELD batches, total, timeTaken, committedOperations
-RETURN batches, total, timeTaken, committedOperations
 
 ### 3. Start the Neo4j Container
 Run the following command in your project directory to start the Neo4j container in detached mode:
