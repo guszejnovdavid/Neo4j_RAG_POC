@@ -96,17 +96,38 @@ embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-
 # # Usage
 # populate_embeddings(driver, embeddings)
 
-# Use existing vector index for Post nodes
-post_index = Neo4jVector(
+post_index1 = Neo4jVector.from_existing_graph(
     embeddings,
     url=NEO4J_URI,
     username=NEO4J_USER,
     password=NEO4J_PASSWORD,
     index_name='posts',
     node_label='Post',
-    text_node_property='body',
+    # text_node_property='body',
+    text_node_properties=['body'],
     embedding_node_property='embedding',
 )
+post_index = Neo4jVector.from_existing_index(
+    embeddings,
+    url=NEO4J_URI,
+    username=NEO4J_USER,
+    password=NEO4J_PASSWORD,
+    index_name='posts',
+    # node_label='Post',
+    text_node_property='body'
+    # embedding_node_property='embedding',
+)
+# # Use existing vector index for Post nodes
+# post_index = Neo4jVector(
+#     embeddings,
+#     url=NEO4J_URI,
+#     username=NEO4J_USER,
+#     password=NEO4J_PASSWORD,
+#     index_name='posts',
+#     node_label='Post',
+#     text_node_property='body',
+#     embedding_node_property='embedding',
+# )
 
 
 def vector_similarity_search(question, top_k=3):
