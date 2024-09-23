@@ -72,9 +72,10 @@ project_folder/
 	```
 to stop the container. This is necessary since we can't import into an active database.
 2. Import the StackOverflow data into the Neo4j database with
-	```bash
-	docker-compose run -rm neo4j neo4j-admin database import full \
-	--id-type string --array-delimiter='|' \
+```bash
+docker-compose run -rm neo4j neo4j-admin database import full \
+	--id-type string \
+	--array-delimiter='|' \
 	--nodes=Post=/var/lib/neo4j/import/posts_with_embeddings.csv \
 	--nodes=User=/var/lib/neo4j/import/users.csv \
 	--nodes=Tag=/var/lib/neo4j/import/tags.csv \
@@ -84,7 +85,7 @@ to stop the container. This is necessary since we can't import into an active da
 	--relationships=POSTED=/var/lib/neo4j/import/users_posts_rel.csv \
 	--overwrite-destination=true \
 	--verbose
-	```	
+```	
 	Note that this can take up to 30 minutes
 3. Restart the container with
 	```bash
