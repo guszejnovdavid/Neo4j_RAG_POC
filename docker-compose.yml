@@ -21,7 +21,8 @@ services:
               count: 1
               capabilities: [gpu]
 
-  neo4j:
+  neo4j-rag:
+    container_name: neo4j-rag
     image: neo4j:5.23.0
     ports:
       - 7888:7474

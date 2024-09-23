@@ -18,7 +18,7 @@ read_batch_size = 32 * batch_size
 # Set up embeddings
 embedding_model = HuggingFaceEmbeddings(
     model_name="sentence-transformers/all-MiniLM-L6-v2",
-    model_kwargs={"device": "cpu"},
+    model_kwargs={"device": "cuda"},
     encode_kwargs={"batch_size": batch_size},
 )
 
