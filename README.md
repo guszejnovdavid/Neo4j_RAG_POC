@@ -107,38 +107,25 @@ FOR (p:Post)
 ON p.embedding
 ```
 
-
-Model from huggingface
-llama.cpp for API to model  (https://github.com/ggerganov/llama.cpp/blob/master/docs/build.md)
-llama-cpp-python to access API in python  (pip install llama-cpp-python)
-
-
-
-
-
-
-# To Create Vector Index on Particular Node Use following Command and embedding
-
+### Set up the LLM
+1) Install Python bindings for llame.cpp to access API through Langchain
 ```bash
-   post_index1 = Neo4jVector.from_existing_graph(
-    embeddings,
-    url=NEO4J_URI,
-    username=NEO4J_USER,
-    password=NEO4J_PASSWORD,
-    index_name='posts',
-    node_label='Post',
-    # text_node_property='body',
-    text_node_properties=['body'],
-    embedding_node_property='embedding',
-)
-# To use existing index:
+pip install llama-cpp-python
+```
+2) Download an LLM model from https://huggingface.co/models. It should be in the .gguf format otherwise you will need to convert it (see https://github.com/ggerganov/llama.cpp for converters)
+3) In hybridsearch.py set ```model_path``` to the path to the downloaded LLM
+
+
+## Usage
+Ensure that your database is riunning then run 
 ```bash
-post_index = Neo4jVector.from_existing_index(
-    embeddings,
-    url=NEO4J_URI,
-    username=NEO4J_USER,
-    password=NEO4J_PASSWORD,
-    index_name='posts',
-    text_node_property='body'
-    
-)
+python hybridsearch.py
+```
+to start the graph RAG model. You can use a browser to access the gradio interface it generates at http://localhost:7860 .
+
+Once a question is submitted the script will search through the posts in the database, comparing their embeddings with that of the question with two methods:
+1) Vector search for the most similar posts using Langchain's similarity_search_with_score() method for Neo4j then returns the most similar ones
+2) Vector search for the most similar posts using using a native Neo4J vector search, then query the graph for the accepted answers to the posts most similar to the question.
+
+The LLM is given two prompts: one without context and one with the context provided by the posts returned by the search.
+
