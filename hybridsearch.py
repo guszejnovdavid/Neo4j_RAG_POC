@@ -15,6 +15,8 @@ from langchain_core.runnables import RunnablePassthrough
 import gradio as gr
 from neo4j import GraphDatabase
 from langchain_community.llms.llamacpp import LlamaCpp
+from langchain_community.llms import VLLM
+from langchain_openai import OpenAI
 
 from tqdm import tqdm
 
@@ -27,6 +29,10 @@ load_dotenv()
 # NEO4J_USER = os.getenv("NEO4J_USER")
 # NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD")
 
+API_KEY = "EMPTY"
+BASE_URL = "http://localhost:8002/v1"
+MODEL_NAME = "microsoft/Phi-3-mini-128k-instruct"
+
 NEO4J_URI = "neo4j://localhost:7999"
 NEO4J_USER = "neo4j"
 NEO4J_PASSWORD = "password"
@@ -37,19 +43,35 @@ driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
 # Set up embedding_model
 embedding_model = HuggingFaceEmbeddings(
     model_name="sentence-transformers/all-MiniLM-L6-v2",
-    model_kwargs={"device": "cuda"},
+    model_kwargs={"device": "cpu"},
 )
 
 # Set up the language model
 model_path = "weights/openhermes-2.5-mistral-7b.Q4_K_M.gguf"
-llm = LlamaCpp(
-    model_path=model_path,
-    temperature=0.5,
-    max_tokens=1000,
-    n_ctx=1024,
-    n_gpu_layers=512,
-)
+# llm = LlamaCpp(
+#     model_path=model_path,
+#     temperature=0.5,
+#     max_tokens=1000,
+#     n_ctx=1024,
+#     n_gpu_layers=512,
+# )
 
+# llm = VLLM(
+#     model="microsoft/Phi-3-mini-128k-instruct",
+#     trust_remote_code=True,
+#     max_model_len=512,
+#     top_k=10,
+#     top_p=0.95,
+#     temperature=0.1,
+#     gpu_memory_utilization=0.95,
+#     dtype="bfloat16",
+# )
+
+llm = OpenAI(
+    api_key="EMPTY", 
+    base_url="http://localhost:8002/v1",
+    model_name="microsoft/Phi-3-mini-128k-instruct",
+)
 
 # This is optional function if you want to run cypher query given in Readme to calcualte embeddings
 post_index = Neo4jVector.from_existing_index(
@@ -84,12 +106,22 @@ def graph_based_search(question, top_k=3):
     with driver.session() as session:
         query = """
         CALL db.index.vector.queryNodes('post_embedding_index', $k, $question_embedding)
-        YIELD node as post, score
-        MATCH (post)-[:HAS_TAG]->(tag)
-        MATCH (post)-[:ANSWER]->(postAnswer:Post)
-        MATCH (postAnswer)<-[:POSTED]-(user)
-        RETURN postAnswer, score, collect(DISTINCT tag.tagId) as tags, user.displayname as author
-        ORDER BY score DESC
+        YIELD 
+            node AS postQuestion, 
+            score
+        MATCH 
+            (postQuestion)-[:HAS_TAG]->(tag)
+        MATCH 
+            (postQuestion)-[:ANSWER]->(postAnswer:Post)
+        MATCH 
+            (postAnswer)<-[:POSTED]-(user)
+        RETURN 
+            postAnswer AS post, 
+            score, 
+            collect(DISTINCT tag.tagId) AS tags, 
+            user.displayname AS author
+        ORDER BY 
+            score DESC
         LIMIT $top_k
         """
 
@@ -144,11 +176,15 @@ def generate_answer(
         Answer:"""
 
         prompt = PromptTemplate(
-            template=template, input_variables=["context", "question"]
+            template=template,
+            input_variables=["context", "question"],
         )
 
         chain = (
-            {"context": RunnablePassthrough(), "question": RunnablePassthrough()}
+            {
+                "context": RunnablePassthrough(),
+                "question": RunnablePassthrough(),
+            }
             | prompt
             | llm
         )

@@ -116,6 +116,19 @@ pip install llama-cpp-python
 2) Download an LLM model from https://huggingface.co/models. It should be in the .gguf format otherwise you will need to convert it (see https://github.com/ggerganov/llama.cpp for converters)
 3) In hybridsearch.py set ```model_path``` to the path to the downloaded LLM
 
+### vLLM
+Run vLLM server in the background
+```
+python -m vllm.entrypoints.openai.api_server \
+	--model $MODEL \
+	--max-model-len 16384 \
+	--dtype bfloat16 \
+	--gpu-memory-utilization 0.90 \
+	--port=8002 \
+	--trust-remote-code \
+	--disable-log-stats
+```
+
 
 ## Usage
 Ensure that your database is riunning then run 
