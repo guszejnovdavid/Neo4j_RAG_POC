@@ -59,34 +59,11 @@ def populate_embeddings(driver, embedding_model, batch_size=100, max_workers=4):
         result = session.run("MATCH (p:Post) WHERE p.embedding IS NULL RETURN p.body AS body, id(p) AS id")
         posts = list(result)
 
-        # Function to process a batch of posts
-        def process_batch(batch):
-            local_embeddings = []
-            for post in batch:
-                if post["body"] is None:
-                    print(f"Warning: Post with id {post['id']} has a null body. Skipping...")
-                    continue
-                try:
-                    embedding = embedding_model.embed_query(post["body"])
-                    local_embeddings.append((post["id"], embedding))
-                except Exception as e:
-                    print(f"Error processing post {post['id']}: {str(e)}")
-            return local_embeddings
-
         # Process posts in batches
         with tqdm(total=len(posts)) as pbar:
             for i in range(0, len(posts), batch_size):
-                batch = posts[i:i+batch_size]
-                
-                # Use ThreadPoolExecutor for parallel processing
-                with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-                    futures = [executor.submit(process_batch, batch[j:j+batch_size//max_workers]) 
-                               for j in range(0, len(batch), batch_size//max_workers)]
-                    
-                    batch_embeddings = []
-                    for future in concurrent.futures.as_completed(futures):
-                        batch_embeddings.extend(future.result())
-
+                #get embeddings
+                embeddings = embedding_model.client.encode(posts[i:i+batch_size], **embedding_model.encode_kwargs)
                 # Bulk update the database
                 with driver.session() as update_session:
                     update_session.run("""
@@ -97,10 +74,45 @@ def populate_embeddings(driver, embedding_model, batch_size=100, max_workers=4):
 
                 pbar.update(len(batch))
 
-        print(f"Embeddings populated successfully. {len(posts)} posts updated.")
+        # # Function to process a batch of posts
+        # def process_batch(batch):
+            # local_embeddings = []
+            # for post in batch:
+                # if post["body"] is None:
+                    # print(f"Warning: Post with id {post['id']} has a null body. Skipping...")
+                    # continue
+                # try:
+                    # embedding = embedding_model.embed_query(post["body"])
+                    # local_embeddings.append((post["id"], embedding))
+                # except Exception as e:
+                    # print(f"Error processing post {post['id']}: {str(e)}")
+            # return local_embeddings
 
-## Usage
-#populate_embeddings(driver, embedding_model)
+        # # Process posts in batches
+        # with tqdm(total=len(posts)) as pbar:
+            # for i in range(0, len(posts), batch_size):
+                # batch = posts[i:i+batch_size]
+                
+                # # Use ThreadPoolExecutor for parallel processing
+                # with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    # futures = [executor.submit(process_batch, batch[j:j+batch_size//max_workers]) 
+                               # for j in range(0, len(batch), batch_size//max_workers)]
+                    
+                    # batch_embeddings = []
+                    # for future in concurrent.futures.as_completed(futures):
+                        # batch_embeddings.extend(future.result())
+
+                # # Bulk update the database
+                # with driver.session() as update_session:
+                    # update_session.run("""
+                    # UNWIND $batch AS item
+                    # MATCH (p:Post) WHERE id(p) = item.id
+                    # SET p.embedding = item.embedding
+                    # """, batch=[{"id": id, "embedding": embedding} for id, embedding in batch_embeddings])
+
+                # pbar.update(len(batch))
+
+        print(f"Embeddings populated successfully. {len(posts)} posts updated.")
 
 post_index = Neo4jVector.from_existing_index(
     embedding_model,
@@ -268,4 +280,8 @@ gr_interface = gr.Interface(
 
 # Launch the Gradio interface
 if __name__ == "__main__":
+    ## Usage
+    #populate_embeddings(driver, embedding_model)
+
     gr_interface.launch()
+    #print("End!")

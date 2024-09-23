@@ -14,7 +14,7 @@ Note that this part is I/O intensive due to the CSV format, so it is recommended
 	```bash
 	python create_csvs.py <path to extracted xml files>
 	```
-	Note that there are roughly 60 million posts, so this can take more than an hour.
+	Note that there are roughly 60 million posts, so this can take more than an hour. The CSV files are saved in new folder called csvs.
 4. Clean the data with
 	```bash
 	python cleaning.py <path to csv files generated in previous step>
@@ -65,31 +65,22 @@ project_folder/
 	docker-compose up -d
 	```
 
+
 #### 4. Import StackOverflow Data into Neo4j
-1. Once the container is up and running, run 
+Once the container is up and running, run 
 	```bash
 	docker-compose stop
 	```
 to stop the container. This is necessary since we can't import into an active database.
-2. Import the StackOverflow data into the Neo4j database with
-	```bash
-	docker-compose run -rm neo4j neo4j-admin database import full \
-	--id-type string --array-delimiter='|' \
-	--nodes=Post=/var/lib/neo4j/import/posts_with_embeddings.csv \
-	--nodes=User=/var/lib/neo4j/import/users.csv \
-	--nodes=Tag=/var/lib/neo4j/import/tags.csv \
-	--relationships=PARENT_OF=/var/lib/neo4j/import/posts_rel.csv \
-	--relationships=ANSWER=/var/lib/neo4j/import/posts_answers.csv \
-	--relationships=HAS_TAG=/var/lib/neo4j/import/tags_posts_rel.csv \
-	--relationships=POSTED=/var/lib/neo4j/import/users_posts_rel.csv \
-	--overwrite-destination=true \
-	--verbose
-	```	
-	Note that this can take up to 30 minutes
-3. Restart the container with
-	```bash
-	docker-compose restart
-	```
+Then import the StackOverflow data into the Neo4j database with
+```bash
+docker-compose run -rm neo4j neo4j-admin database import full --id-type string --array-delimiter='|' --nodes=Post=/var/lib/neo4j/import/posts_with_embeddings.csv --nodes=User=/var/lib/neo4j/import/users.csv --nodes=Tag=/var/lib/neo4j/import/tags.csv --relationships=PARENT_OF=/var/lib/neo4j/import/posts_rel.csv --relationships=ANSWER=/var/lib/neo4j/import/posts_answers.csv --relationships=HAS_TAG=/var/lib/neo4j/import/tags_posts_rel.csv --relationships=POSTED=/var/lib/neo4j/import/users_posts_rel.csv --overwrite-destination=true --verbose
+```	
+Note that this can take up to 30 minutes
+Once it is done, restart the container with
+```bash
+docker-compose restart
+```
 
 #### 5. Access Neo4j Database
 Open a web browser and navigate to http://localhost:7888 to access your Neo4j database and inspect the schema.

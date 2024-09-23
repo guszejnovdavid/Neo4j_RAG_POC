@@ -4,7 +4,6 @@
 
 import json, sys, os, xmltodict, csv
 from os.path import join
-from utils import *
 import shutil
 from tqdm import tqdm
 import sys
