@@ -1,5 +1,11 @@
 .env
 .cache
 flagged
+db/*
 db/import/*.csv
+csvs/*
+csvs_full/*
+flagged/*
 venv
+*.gguf
+!*dummy.txt

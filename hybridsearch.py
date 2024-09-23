@@ -1,134 +1,115 @@
 import os
 import time
 from dotenv import load_dotenv
-from langchain.vectorstores.neo4j_vector import Neo4jVector
+from langchain_community.vectorstores.neo4j_vector import Neo4jVector
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain.chains import RetrievalQA
-from langchain_huggingface import HuggingFacePipeline
-from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
-import torch
+#from langchain_huggingface import HuggingFacePipeline
+#from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
+#import torch
 from langchain_core.prompts import PromptTemplate
-from langchain_core.runnables import RunnableSequence, RunnablePassthrough
+from langchain_core.runnables import RunnablePassthrough
+#from langchain_core.runnables import RunnableSequence
 import gradio as gr
 from neo4j import GraphDatabase
-from langchain.llms import LlamaCpp
-import concurrent.futures
+from langchain_community.llms.llamacpp import LlamaCpp
+#import concurrent.futures
 from tqdm import tqdm
+
 
 # Load environment variables
 load_dotenv()
 
 # Set up Neo4j connection
-NEO4J_URI = os.getenv("NEO4J_URI")
-NEO4J_USER = os.getenv("NEO4J_USER")
-NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD")
+#NEO4J_URI = os.getenv("NEO4J_URI")
+#NEO4J_USER = os.getenv("NEO4J_USER")
+#NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD")
+
+NEO4J_URI = "neo4j://localhost:7999"
+NEO4J_USER = "neo4j"
+NEO4J_PASSWORD = "password"
 
 # Set up Neo4j driver
 driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
 
+# Set up embedding_model
+embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2",model_kwargs={'device': 'cuda'})  
 
 # Set up the language model
-model_path = "./openhermes-2.5-mistral-7b.Q4_K_M.gguf"
-llm = LlamaCpp(model_path=model_path, temperature=0.5, max_tokens=1000)
+model_path = "./openhermes-2.5-mistral-7b.Q3_K_M.gguf"
+llm = LlamaCpp(model_path=model_path, temperature=0.5, max_tokens=1000, n_ctx=1024)
 
-# Set up embeddings
-embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+
 
 # This is optional function if you want to run cypher query given in Readme to calcualte embeddings
 
-# def populate_embeddings(driver, embeddings, batch_size=100, max_workers=4):
-#     with driver.session() as session:
-#         # Check if there are any posts without embeddings
-#         count_result = session.run("MATCH (p:Post) WHERE p.embedding IS NULL RETURN count(p) AS count").single()
-#         posts_without_embeddings = count_result["count"]
+def populate_embeddings(driver, embedding_model, batch_size=100, max_workers=4):
+    with driver.session() as session:
+        # Check if there are any posts without embeddings
+        count_result = session.run("MATCH (p:Post) WHERE p.embedding IS NULL RETURN count(p) AS count").single()
+        posts_without_embeddings = count_result["count"]
 
-#         if posts_without_embeddings == 0:
-#             print("All posts already have embeddings. No action needed.")
-#             return
+        if posts_without_embeddings == 0:
+            print("All posts already have embeddings. No action needed.")
+            return
 
-#         print(f"Found {posts_without_embeddings} posts without embeddings. Populating now...")
+        print(f"Found {posts_without_embeddings} posts without embeddings. Populating now...")
 
-#         # Fetch all posts without embeddings
-#         result = session.run("MATCH (p:Post) WHERE p.embedding IS NULL RETURN p.body AS body, id(p) AS id")
-#         posts = list(result)
+        # Fetch all posts without embeddings
+        result = session.run("MATCH (p:Post) WHERE p.embedding IS NULL RETURN p.body AS body, id(p) AS id")
+        posts = list(result)
 
-#         # Function to process a batch of posts
-#         # Function to process a batch of posts
-#         def process_batch(batch):
-#             local_embeddings = []
-#             for post in batch:
-#                 if post["body"] is None:
-#                     print(f"Warning: Post with id {post['id']} has a null body. Skipping...")
-#                     continue
-#                 try:
-#                     embedding = embeddings.embed_query(post["body"])
-#                     local_embeddings.append((post["id"], embedding))
-#                 except Exception as e:
-#                     print(f"Error processing post {post['id']}: {str(e)}")
-#             return local_embeddings
+        # Function to process a batch of posts
+        def process_batch(batch):
+            local_embeddings = []
+            for post in batch:
+                if post["body"] is None:
+                    print(f"Warning: Post with id {post['id']} has a null body. Skipping...")
+                    continue
+                try:
+                    embedding = embedding_model.embed_query(post["body"])
+                    local_embeddings.append((post["id"], embedding))
+                except Exception as e:
+                    print(f"Error processing post {post['id']}: {str(e)}")
+            return local_embeddings
 
-#         # Process posts in batches
-#         with tqdm(total=len(posts)) as pbar:
-#             for i in range(0, len(posts), batch_size):
-#                 batch = posts[i:i+batch_size]
+        # Process posts in batches
+        with tqdm(total=len(posts)) as pbar:
+            for i in range(0, len(posts), batch_size):
+                batch = posts[i:i+batch_size]
                 
-#                 # Use ThreadPoolExecutor for parallel processing
-#                 with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-#                     futures = [executor.submit(process_batch, batch[j:j+batch_size//max_workers]) 
-#                                for j in range(0, len(batch), batch_size//max_workers)]
+                # Use ThreadPoolExecutor for parallel processing
+                with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    futures = [executor.submit(process_batch, batch[j:j+batch_size//max_workers]) 
+                               for j in range(0, len(batch), batch_size//max_workers)]
                     
-#                     batch_embeddings = []
-#                     for future in concurrent.futures.as_completed(futures):
-#                         batch_embeddings.extend(future.result())
+                    batch_embeddings = []
+                    for future in concurrent.futures.as_completed(futures):
+                        batch_embeddings.extend(future.result())
 
-#                 # Bulk update the database
-#                 with driver.session() as update_session:
-#                     update_session.run("""
-#                     UNWIND $batch AS item
-#                     MATCH (p:Post) WHERE id(p) = item.id
-#                     SET p.embedding = item.embedding
-#                     """, batch=[{"id": id, "embedding": embedding} for id, embedding in batch_embeddings])
+                # Bulk update the database
+                with driver.session() as update_session:
+                    update_session.run("""
+                    UNWIND $batch AS item
+                    MATCH (p:Post) WHERE id(p) = item.id
+                    SET p.embedding = item.embedding
+                    """, batch=[{"id": id, "embedding": embedding} for id, embedding in batch_embeddings])
 
-#                 pbar.update(len(batch))
+                pbar.update(len(batch))
 
-#         print(f"Embeddings populated successfully. {len(posts)} posts updated.")
+        print(f"Embeddings populated successfully. {len(posts)} posts updated.")
 
-# # Usage
-# populate_embeddings(driver, embeddings)
+## Usage
+#populate_embeddings(driver, embedding_model)
 
-post_index1 = Neo4jVector.from_existing_graph(
-    embeddings,
-    url=NEO4J_URI,
-    username=NEO4J_USER,
-    password=NEO4J_PASSWORD,
-    index_name='posts',
-    node_label='Post',
-    # text_node_property='body',
-    text_node_properties=['body'],
-    embedding_node_property='embedding',
-)
 post_index = Neo4jVector.from_existing_index(
-    embeddings,
+    embedding_model,
     url=NEO4J_URI,
     username=NEO4J_USER,
     password=NEO4J_PASSWORD,
-    index_name='posts',
-    # node_label='Post',
+    index_name='post_embedding_index',
     text_node_property='body'
-    # embedding_node_property='embedding',
 )
-# # Use existing vector index for Post nodes
-# post_index = Neo4jVector(
-#     embeddings,
-#     url=NEO4J_URI,
-#     username=NEO4J_USER,
-#     password=NEO4J_PASSWORD,
-#     index_name='posts',
-#     node_label='Post',
-#     text_node_property='body',
-#     embedding_node_property='embedding',
-# )
-
 
 def vector_similarity_search(question, top_k=3):
     start_time = time.time()
@@ -146,16 +127,16 @@ def graph_based_search(question, top_k=3):
     start_time = time.time()
     with driver.session() as session:
         query = """
-        CALL db.index.vector.queryNodes('posts', $k, $question_embedding)
+        CALL db.index.vector.queryNodes('post_embedding_index', $k, $question_embedding)
         YIELD node as post, score
         MATCH (post)-[:HAS_TAG]->(tag)
         MATCH (post)<-[:POSTED]-(user)
-        RETURN post, score, collect(DISTINCT tag.name) as tags, user.name as author
+        RETURN post, score, collect(DISTINCT tag.tagId) as tags, user.displayname as author
         ORDER BY score DESC
         LIMIT $top_k
         """
-        
-        question_embedding = embeddings.embed_query(question)
+               
+        question_embedding = embedding_model.embed_query(question)
         
         result = session.run(query, 
                              question_embedding=question_embedding, 
@@ -163,19 +144,27 @@ def graph_based_search(question, top_k=3):
                              top_k=top_k)
         
         results = [{"post": record["post"]["body"], 
-                    "score": record["score"], 
-                    "tags": record["tags"],
-                    "author": record["author"]} for record in result]
+            "score": record["score"], 
+            "tags": record["tags"],
+            "author": record["author"]} for record in result]
+        
+        
+        # query = """MATCH (p:Post) - [:HAS_TAG] - (n:Tag)
+        # WHERE n.tagId = "canaria"  RETURN p;"""
+        # result = session.run(query)     
+        # results = [{"post": record["p"]["body"], "score": 1.0} for record in result]
     
     end_time = time.time()
     search_time = end_time - start_time
     
     return results, search_time
 
-def generate_answer(question, documents):
+def generate_answer(question, documents, max_context_length = 500, max_answer_length = 1000):
     try:
-        max_context_length = 100
-        context = " ".join([doc["post"][:max_context_length] for doc in documents])
+        if documents is None:
+            context = ""
+        else:
+            context = " ".join([doc["post"][:max_context_length] for doc in documents])
         
         template = """Given the following detailed context from Stack Overflow posts, 
         please provide a comprehensive and well-explained answer to the question. 
@@ -197,7 +186,7 @@ def generate_answer(question, documents):
         )
         
         response = chain.invoke({"context": context, "question": question})
-        print(f"LLM Response: {response[:1000]}")  
+        print(f"LLM Response: {response[:max_answer_length]}")  
         return response
         
     except Exception as e:
@@ -239,6 +228,9 @@ def stackoverflow_qa(question):
         # Generate answer using LLM with hybrid results
         answer = generate_answer(question, hybrid_results)
         
+        # Generate answer using LLM without context
+        answer_no_context = generate_answer(question, None)
+        
         # Prepare document display for hybrid results
         hybrid_doc_display = "\n\n".join([
             f"Document {i+1}:\n"
@@ -252,7 +244,7 @@ def stackoverflow_qa(question):
         # Prepare timing information
         timing_info = f"Vector Search Time: {vector_time:.4f} seconds\nGraph Search Time: {graph_time:.4f} seconds"
         
-        return answer, hybrid_doc_display, timing_info
+        return answer_no_context, answer, hybrid_doc_display, timing_info
     
     except Exception as e:
         error_message = f"An error occurred: {type(e).__name__}, {str(e)}"
@@ -265,11 +257,12 @@ gr_interface = gr.Interface(
         gr.Textbox(lines=2, placeholder="Ask a question about programming...")
     ],
     outputs=[
-        gr.Textbox(label="Generated Answer"),
+        gr.Textbox(label="Generated Answer without context"),
+        gr.Textbox(label="Generated Answer with context"),
         gr.Markdown(label="Hybrid Search Results"),
         gr.Markdown(label="Search Timing Information")
     ],
-    title="Stack Overflow RAG Application with Hybrid Search",
+    title="StackOverflow GraphRAG Application with Hybrid Search",
     description="Ask questions about programming topics and get answers using a Retrieval-Augmented Generation model with hybrid vector and graph-based search."
 )    
 

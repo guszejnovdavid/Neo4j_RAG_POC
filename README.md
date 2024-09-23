@@ -1,62 +1,44 @@
-# The Stack Overflow data can be downloaded from the given website just scroll down and click csv
-https://neo4j.com/blog/import-10m-stack-overflow-questions/
+# Neo4j RAG PoC Using StackOverflow
 
-# Neo4j Data Import Guide
+## Importing StackOverflow into Neo4j
 
-This guide explains how to set up Neo4j using Docker Compose and import data using CSV files.
+Based on the guide by https://neo4j.com/blog/import-10m-stack-overflow-questions/.
+Note that this part is I/O intensive due to the CSV format, so it is recommended to store the data on a fast SSD.
 
-## Prerequisites
+### Obtaining Stack Overflow Data
 
-- Docker and Docker Compose installed on your system
-- CSV files prepared for import:
-  - `posts.csv`
-  - `users.csv`
-  - `tags.csv`
-  - `posts_rel.csv`
-  - `posts_answers.csv`
-  - `tags_posts_rel.csv`
-  - `users_posts_rel.csv`
+#### Option 1: Download and Process Up-to-Date Data
+1. Download up-to-date StackOverflow data dumps from the Internet Archive (https://archive.org/download/stackexchange).
+2. Extract files (e.g., with WinRaR)
+3. Generate the CSV files 
+	```bash
+	python create_csvs.py <path to extracted xml files>
+	```
+	Note that there are roughly 60 million posts, so this can take more than an hour.
+4. Clean the data with
+	```bash
+	python cleaning.py <path to csv files generated in previous step>
+	```
+	This can take up to 20 minutes.
+	
+#### Option 2: Download Ready-to-Use Older Data
+Download 2015 version from https://example-data.neo4j.org/files/stackoverflow/stackoverflow-2015-08-22.csv.tar
+While this is much faster than Option 1, these posts are old and truncated, so we recommend using the up-todate posts from Option 1.
 
-## Steps
+### Neo4j Database Setup
 
-### 1. Create a `docker-compose.yml` File
+#### 1. Generate Embeddings
+Although embeddings can be generated directly from Neo4j, but generating them externally offers more felxibility and potentially better performance. 
+Generate embeddings to each post by running 
+	```bash
+	python generate_embeddings.py <path to folder of posts.cvs>
+	```
+Note that depending on your system this can take up to 10 hours.
 
-Create a file named `docker-compose.yml` in your project directory with the following content:
+#### 2. Prepare Your Directory Structure
 
-```yaml
-version: "3.8"
-services:
-  neo4j:
-    image: neo4j:5.19.0
-    ports:
-      - 7888:7474
-      - 7999:7687
-    deploy:
-      resources:
-        limits:
-          memory: 6G
-        reservations:
-          memory: 4G
-    restart: unless-stopped
-    environment:
-      - NEO4J_AUTH=neo4j/password
-      - NEO4J_PLUGINS=["apoc", "apoc-extended"]
-      - NEO4J_apoc_export_file_enabled=true
-      - NEO4J_apoc_import_file_enabled=true
-      - NEO4J_apoc_import_file_use__neo4j__config=true
-      - NEO4J_dbms_memory_pagecache_size=2G
-      - NEO4J_dbms_memory_heap_initial__size=1G
-      - NEO4J_dbms_memory_heap_max__size=3G
-    volumes:
-      - ./db/data:/data
-      - ./db/conf:/conf
-      - ./db/logs:/logs
-      - ./db/plugins:/plugins
-      - ./db/import:/var/lib/neo4j/import
-
-### 2. Prepare Your Directory Structure
-Ensure you have the following directory structure in your project folder:
-
+Set up the following directory structure in your project folder and copy the relevant CSV files to ```db/import```:
+```
 project_folder/
 ├── docker-compose.yml
 └── db/
@@ -65,16 +47,75 @@ project_folder/
     ├── logs/
     ├── plugins/
     └── import/
-        ├── posts.csv
+        ├── posts_with_embeddings.csv
         ├── users.csv
         ├── tags.csv
         ├── posts_rel.csv
         ├── posts_answers.csv
         ├── tags_posts_rel.csv
         └── users_posts_rel.csv
-# Put data downloaded earlier in import folder after running cleaning.py
+```
+
+#### 3. Build and Start Neo4j Container
+
+1. Ensure that you have Docker and Docker Compose installed on your system.
+2. Check and configure the settings in docker-compose.yml (e.g., port numbers). Don't forget to replace the password with a secure one before deploying in a production environment
+3. Build and start the Neo4j container from the project folder in detached mode:
+	```bash
+	docker-compose up -d
+	```
+
+#### 4. Import StackOverflow Data into Neo4j
+1. Once the container is up and running, run 
+	```bash
+	docker-compose stop
+	```
+to stop the container. This is necessary since we can't import into an active database.
+2. Import the StackOverflow data into the Neo4j database with
+	```bash
+	docker-compose run -rm neo4j neo4j-admin database import full \
+	--id-type string --array-delimiter='|' \
+	--nodes=Post=/var/lib/neo4j/import/posts_with_embeddings.csv \
+	--nodes=User=/var/lib/neo4j/import/users.csv \
+	--nodes=Tag=/var/lib/neo4j/import/tags.csv \
+	--relationships=PARENT_OF=/var/lib/neo4j/import/posts_rel.csv \
+	--relationships=ANSWER=/var/lib/neo4j/import/posts_answers.csv \
+	--relationships=HAS_TAG=/var/lib/neo4j/import/tags_posts_rel.csv \
+	--relationships=POSTED=/var/lib/neo4j/import/users_posts_rel.csv \
+	--overwrite-destination=true \
+	--verbose
+	```	
+	Note that this can take up to 30 minutes
+3. Restart the container with
+	```bash
+	docker-compose restart
+	```
+
+#### 5. Access Neo4j Database
+Open a web browser and navigate to http://localhost:7888 to access your Neo4j database and inspect the schema.
+
+If you are experiencing issues, check the Neo4j logs for detailed error messages:
 ```bash
-python cleaning.py
+docker-compose logs neo4j
+```
+
+#### 6. Generate Vector Index from the Embeddings
+Execute the following Cypher command to create a vector index on the post embeddings
+```Cypher
+CREATE VECTOR INDEX post_embedding_index IF NOT EXISTS 
+FOR (p:Post)
+ON p.embedding
+```
+
+
+Model from huggingface
+llama.cpp for API to model  (https://github.com/ggerganov/llama.cpp/blob/master/docs/build.md)
+llama-cpp-python to access API in python  (pip install llama-cpp-python)
+
+
+
+
+
 
 # To Create Vector Index on Particular Node Use following Command and embedding
 
@@ -101,60 +142,3 @@ post_index = Neo4jVector.from_existing_index(
     text_node_property='body'
     
 )
-
-### 3. Start the Neo4j Container
-Run the following command in your project directory to start the Neo4j container in detached mode:
-```bash
-docker-compose up -d
-
-### 4. Run the Import Command
-Once the container is up and running, execute the import command:
-```bash
-docker-compose exec neo4j neo4j-admin database import full \
---id-type string \
---nodes=Post=/var/lib/neo4j/import/posts.csv \
---nodes=User=/var/lib/neo4j/import/users.csv \
---nodes=Tag=/var/lib/neo4j/import/tags.csv \
---relationships=PARENT_OF=/var/lib/neo4j/import/posts_rel.csv \
---relationships=ANSWER=/var/lib/neo4j/import/posts_answers.csv \
---relationships=HAS_TAG=/var/lib/neo4j/import/tags_posts_rel.csv \
---relationships=POSTED=/var/lib/neo4j/import/users_posts_rel.csv \
---overwrite-destination=true \
---verbose
-
-
-### 5. Restart the Neo4j Container
-Restart the Neo4j container to apply the changes:
-```bash
-docker-compose restart neo4j
-
-### 6. Access Neo4j
-Open a web browser and navigate to http://localhost:7888. Log in using the username neo4j and the password you set in the docker-compose.yml file.
-
-Configuration Details:
-Neo4j Browser: Accessible on port 7888
-Bolt Protocol: Accessible on port 7999
-Memory Limits:
-Total memory limit: 6GB
-Reserved memory: 4GB
-Page cache: 2GB
-Initial heap size: 1GB
-Max heap size: 3GB
-Plugins: APOC plugins enabled for extended functionality
-File Import/Export: Enabled via APOC
-Troubleshooting
-Permission Issues: Ensure that the Neo4j user has read access to the CSV files.
-
-CSV Formatting: Verify that your CSV files are correctly formatted according to Neo4j's requirements.
-
-Logs: Check the Neo4j logs for detailed error messages:
-
-```bash
-docker-compose logs neo4j
-
-Additional Notes
-The --id-type string option specifies that node IDs are strings. Adjust if your data uses different ID types.
-The --overwrite-destination=true flag allows overwriting an existing database. Use with caution in production environments.
-The --verbose flag provides detailed output during the import process, which can be helpful for debugging.
-
-Reminder: Replace the password in the docker-compose.yml file with a secure one before deploying in a production environment.

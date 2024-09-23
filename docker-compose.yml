@@ -1,7 +1,6 @@
-version: "3.8"
 services:
   neo4j:
-    image:  neo4j:5.19.0
+    image:  neo4j:5.23.0
     ports:
       - 7888:7474
       - 7999:7687

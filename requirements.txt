@@ -114,6 +114,7 @@ typing-inspect==0.9.0
 typing_extensions==4.12.2
 tzdata==2024.1
 urllib3==2.2.2
+utils-1.0.2
 uvicorn==0.30.6
 websockets==12.0
 yarl==1.9.4
