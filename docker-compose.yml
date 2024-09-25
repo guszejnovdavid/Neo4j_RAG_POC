@@ -1,6 +1,29 @@
 services:
-  neo4j:
-    image:  neo4j:5.23.0
+  neo4j-rag-base:
+    container_name: neo4j-rag-base
+    image: neo4j-rag-base-image
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    network_mode: host
+    privileged: true
+    stdin_open: true
+    tty: true
+    volumes:
+      - .:/home/root
+    working_dir: /home/root
+    user: root
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  neo4j-rag:
+    container_name: neo4j-rag
+    image: neo4j:5.23.0
     ports:
       - 7888:7474
       - 7999:7687
