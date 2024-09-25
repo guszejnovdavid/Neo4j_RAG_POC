@@ -109,33 +109,42 @@ ON p.embedding
 ```
 
 ### Set up the LLM
-1) Install Python bindings for llame.cpp to access API through Langchain
+
+#### Using llama.cpp
+1) Install Python bindings for llama.cpp to access API through Langchain
 ```bash
 pip install llama-cpp-python
 ```
 2) Download an LLM model from https://huggingface.co/models. It should be in the .gguf format otherwise you will need to convert it (see https://github.com/ggerganov/llama.cpp for converters)
-3) In hybridsearch.py set ```model_path``` to the path to the downloaded LLM
 
-### vLLM
-Run vLLM server in the background
+
+#### Using vLLM
+Run a vLLM server in the background (requires Linux), below is an example
 ```
 python -m vllm.entrypoints.openai.api_server \
-	--model $MODEL \
-	--max-model-len 16384 \
+	--model microsoft/Phi-3-mini-128k-instruct \
+	--max-model-len 4096 \
 	--dtype bfloat16 \
 	--gpu-memory-utilization 0.90 \
 	--port=8002 \
 	--trust-remote-code \
 	--disable-log-stats
 ```
+Depending on your system you might want to change the parameters.
 
 
 ## Usage
-Ensure that your database is riunning then run 
+If you are using llama.cpp run:
 ```bash
-python hybridsearch.py
+python hybridsearch.py llamacpp <path_to_your_model_file>
 ```
-to start the graph RAG model. You can use a browser to access the gradio interface it generates at http://localhost:7860 .
+
+If you are using vLLM run:
+```bash
+python hybridsearch.py vllm <name_of_the_model>
+``` 
+
+Once the graph RAG model has started you can use a browser to access the gradio interface it generates at http://localhost:7860 .
 
 Once a question is submitted the script will search through the posts in the database, comparing their embeddings with that of the question with two methods:
 1) Vector search for the most similar posts using Langchain's similarity_search_with_score() method for Neo4j then returns the most similar ones

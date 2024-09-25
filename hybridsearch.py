@@ -1,5 +1,6 @@
 import os
 import time
+import sys
 from dotenv import load_dotenv
 from langchain_community.vectorstores.neo4j_vector import Neo4jVector
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -14,9 +15,7 @@ from langchain_core.runnables import RunnablePassthrough
 # from langchain_core.runnables import RunnableSequence
 import gradio as gr
 from neo4j import GraphDatabase
-from langchain_community.llms.llamacpp import LlamaCpp
-from langchain_community.llms import VLLM
-from langchain_openai import OpenAI
+
 
 from tqdm import tqdm
 
@@ -29,13 +28,12 @@ load_dotenv()
 # NEO4J_USER = os.getenv("NEO4J_USER")
 # NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD")
 
-API_KEY = "EMPTY"
-BASE_URL = "http://localhost:8002/v1"
-MODEL_NAME = "microsoft/Phi-3-mini-128k-instruct"
-
 NEO4J_URI = "neo4j://localhost:7999"
 NEO4J_USER = "neo4j"
 NEO4J_PASSWORD = "password"
+
+LLM_LIBRARY = sys.argv[1]
+LLM_MODEL = sys.argv[2] 
 
 # Set up Neo4j driver
 driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
@@ -43,35 +41,48 @@ driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
 # Set up embedding_model
 embedding_model = HuggingFaceEmbeddings(
     model_name="sentence-transformers/all-MiniLM-L6-v2",
-    model_kwargs={"device": "cpu"},
+    model_kwargs={"device": "cuda"},
 )
 
 # Set up the language model
-model_path = "weights/openhermes-2.5-mistral-7b.Q4_K_M.gguf"
-# llm = LlamaCpp(
-#     model_path=model_path,
-#     temperature=0.5,
-#     max_tokens=1000,
-#     n_ctx=1024,
-#     n_gpu_layers=512,
-# )
+if (LLM_LIBRARY=='llamacpp'):
+    from langchain_community.llms.llamacpp import LlamaCpp
+    model_path = LLM_MODEL #example "openhermes-2.5-mistral-7b.Q4_K_M.gguf"
+    llm = LlamaCpp(
+        model_path=model_path,
+        temperature=0.5,
+        max_tokens=1000,
+        n_ctx=1024,
+        n_gpu_layers=512,
+    )
+elif (LLM_LIBRARY=='vllm'):
+    
+    from langchain_openai import OpenAI
 
-# llm = VLLM(
-#     model="microsoft/Phi-3-mini-128k-instruct",
-#     trust_remote_code=True,
-#     max_model_len=512,
-#     top_k=10,
-#     top_p=0.95,
-#     temperature=0.1,
-#     gpu_memory_utilization=0.95,
-#     dtype="bfloat16",
-# )
+    API_KEY = "EMPTY"
+    BASE_URL = "http://localhost:8002/v1"
+    model_name = LLM_MODEL # example "microsoft/Phi-3-mini-128k-instruct"
 
-llm = OpenAI(
-    api_key="EMPTY", 
-    base_url="http://localhost:8002/v1",
-    model_name="microsoft/Phi-3-mini-128k-instruct",
-)
+    llm = OpenAI(
+        api_key="EMPTY", 
+        base_url="http://localhost:8002/v1",
+        model_name=model_name,
+    )
+    #from langchain_community.llms import VLLM
+    # llm = VLLM(
+    #     model=model_name,
+    #     trust_remote_code=True,
+    #     max_model_len=512,
+    #     top_k=10,
+    #     top_p=0.95,
+    #     temperature=0.1,
+    #     gpu_memory_utilization=0.95,
+    #     dtype="bfloat16",
+    # )
+else:
+    print(" Unknown parameter for LLM_LIBRARY: %s\n Please use either llamacpp or vllm"%(LLM_LIBRARY))
+    exit()
+
 
 # This is optional function if you want to run cypher query given in Readme to calcualte embeddings
 post_index = Neo4jVector.from_existing_index(
