@@ -42,6 +42,7 @@ driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
 embedding_model = HuggingFaceEmbeddings(
     model_name="sentence-transformers/all-MiniLM-L6-v2",
     model_kwargs={"device": "cuda"},
+    encode_kwargs={"batch_size": 128}
 )
 
 # Set up the language model
@@ -93,6 +94,40 @@ post_index = Neo4jVector.from_existing_index(
     index_name="post_embedding_index",
     text_node_property="body",
 )
+
+def populate_embeddings(driver, embedding_model, batch_size=512):
+    with driver.session() as session:
+        # Check if there are any posts without embeddings
+        count_result = session.run("MATCH (p:Post) RETURN count(p) AS count").single()
+        posts_without_embeddings = count_result["count"]
+
+        if posts_without_embeddings == 0:
+            print("All posts already have embeddings. No action needed.")
+            return
+
+        print(f"Found {posts_without_embeddings} posts without embeddings. Populating now...")
+
+        # Fetch all posts without embeddings
+        posts = list(session.run("MATCH (p:Post) WHERE p.embedding IS NULL RETURN p.body AS body, p.postId AS postid"))
+        #posts = list(session.run("MATCH (p:Post) RETURN p.body AS body, p.postId AS postid LIMIT 1000")) #for testing
+
+        # Process posts in batches
+        with tqdm(total=len(posts)) as pbar:
+            for i in range(0, len(posts), batch_size):
+                #get embeddings
+                post_ids = [p["postid"] for p in posts[i:i+batch_size]]
+                embeddings = embedding_model.client.encode([p["body"] for p in posts[i:i+batch_size]], **embedding_model.encode_kwargs)
+                # Bulk update the database
+                with driver.session() as update_session:
+                    update_session.run("""
+                    UNWIND $batch AS item
+                    MATCH (p:Post) WHERE p.postId = item.postId
+                    SET p.embedding = item.embedding
+                    """, batch=[{"postId": post_id, "embedding": embedding} for post_id, embedding in zip(embeddings,post_ids)])
+
+                pbar.update(len(post_ids))
+
+        print(f"Embeddings populated successfully. {len(posts)} posts updated.")
 
 
 def vector_similarity_search(question, top_k=3):
@@ -154,11 +189,6 @@ def graph_based_search(question, top_k=3):
             }
             for record in result
         ]
-
-        # query = """MATCH (p:Post) - [:HAS_TAG] - (n:Tag)
-        # WHERE n.tagId = "canaria"  RETURN p;"""
-        # result = session.run(query)
-        # results = [{"post": record["p"]["body"], "score": 1.0} for record in result]
 
     end_time = time.time()
     search_time = end_time - start_time
@@ -288,4 +318,5 @@ gr_interface = gr.Interface(
 
 # Launch the Gradio interface
 if __name__ == "__main__":
+    populate_embeddings(driver, embedding_model)
     gr_interface.launch()
