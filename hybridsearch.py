@@ -84,7 +84,6 @@ else:
     print(" Unknown parameter for LLM_LIBRARY: %s\n Please use either llamacpp or vllm"%(LLM_LIBRARY))
     exit()
 
-
 # This is optional function if you want to run cypher query given in Readme to calcualte embeddings
 post_index = Neo4jVector.from_existing_index(
     embedding_model,
